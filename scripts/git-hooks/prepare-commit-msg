@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+#
+# prepare-commit-msg: append the commit subject to CHANGELOG.md under
+# [Unreleased] and stage the changelog so it lands in this same commit.
+#
+# Category is chosen from the conventional-commit prefix of the subject:
+#   feat: -> Added    fix: -> Fixed    anything else -> Changed
+#
+# Enable with: make install-hooks  (sets core.hooksPath to scripts/git-hooks)
+
+set -euo pipefail
+
+MSG_FILE="$1"
+SOURCE="${2:-}"
+
+# Only run for ordinary commits. Skip merges, squashes, amends (-c/-C/--amend),
+# and commits created from a -m/-F template that git marks as "message" only
+# when there is no interactive edit — those still carry a real subject, so we
+# allow empty SOURCE ("" = normal) and "message", but skip the rest.
+case "$SOURCE" in
+  merge|squash|commit|template) exit 0 ;;
+esac
+
+# Locate the changelog at the repo root; do nothing if it isn't there.
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+CHANGELOG="$REPO_ROOT/CHANGELOG.md"
+[ -f "$CHANGELOG" ] || exit 0
+
+# First non-empty, non-comment line of the commit message is the subject.
+SUBJECT="$(grep -v '^#' "$MSG_FILE" | sed '/^[[:space:]]*$/d' | head -n1 || true)"
+[ -n "$SUBJECT" ] || exit 0
+
+# Map the conventional-commit prefix to a Keep a Changelog category.
+case "$SUBJECT" in
+  feat:*|feat\(*) CATEGORY="Added" ;;
+  fix:*|fix\(*)   CATEGORY="Fixed" ;;
+  *)              CATEGORY="Changed" ;;
+esac
+
+# Strip a leading conventional-commit prefix (feat:, fix(scope):, chore!: ...)
+# from the displayed text, since the category already conveys it.
+TEXT="$(printf '%s' "$SUBJECT" | sed -E 's/^[a-z]+(\([^)]*\))?!?:[[:space:]]*//')"
+
+DATE="$(date +%F)"
+ENTRY="- ${TEXT} (${DATE})"
+
+# Avoid duplicating an identical entry (e.g. on re-runs). The -- stops grep
+# from reading the leading "-" of the entry as an option.
+if grep -qF -- "$ENTRY" "$CHANGELOG"; then
+  exit 0
+fi
+
+# Insert the entry immediately under the matching "### <Category>" heading
+# inside the [Unreleased] section. Only the first match is used.
+TMP="$(mktemp)"
+awk -v entry="$ENTRY" -v heading="### ${CATEGORY}" '
+  !done && $0 == heading {
+    print              # the heading itself
+    print ""           # blank line so markdown renders the list
+    print entry        # newest entry goes on top
+    done=1
+    skipblank=1
+    next
+  }
+  # Drop the original blank line that followed the heading to avoid doubling it.
+  skipblank { skipblank=0; if ($0 ~ /^[[:space:]]*$/) next }
+  { print }
+  END {
+    if (!done) {
+      # Heading was missing; nothing inserted. Signal via exit code 3.
+      exit 3
+    }
+  }
+' "$CHANGELOG" > "$TMP" && STATUS=0 || STATUS=$?
+
+if [ "$STATUS" -eq 3 ]; then
+  rm -f "$TMP"
+  exit 0   # No matching heading; leave the changelog untouched.
+fi
+
+mv "$TMP" "$CHANGELOG"
+git add "$CHANGELOG"
