@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- first commit -m (2026-06-18)
 - `config.Load` now walks up the directory tree to locate `.env`, so it works when `go test` runs from a sub-package directory. (2026-06-18)
 
 ### Fixed
