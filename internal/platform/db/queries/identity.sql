@@ -41,3 +41,28 @@ SELECT * FROM memberships
 WHERE user_id = @user_id
 AND status = 'active'
 ORDER BY created_at DESC;
+
+
+-- name: CreateMembership :one
+-- Create a new membership for a user
+INSERT INTO memberships (estate_id, user_id, role)
+VALUES (@estate_id, @user_id, @role)
+RETURNING *;
+
+-- name: SuspendMembershipByID :one
+-- Suspend a single membership for a user using the membership id
+UPDATE memberships
+SET status = 'suspended'
+WHERE id = $1
+AND status = 'active'
+RETURNING *; 
+
+
+
+-- name: SuspendMembershipForUser :many
+-- Suspend a single membership (reversible). Only acts on active memberships.
+UPDATE memberships
+SET status = 'suspended'
+WHERE user_id = @user_id
+AND status = 'active'
+RETURNING *;

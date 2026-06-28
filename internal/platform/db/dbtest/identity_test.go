@@ -6,6 +6,7 @@ import (
 
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	dbgen "github.com/joekings2k/staypass-be/internal/platform/db/gen"
 	"github.com/joekings2k/staypass-be/internal/platform/utils"
 	"github.com/stretchr/testify/require"
@@ -39,6 +40,27 @@ func createRandomUser(t *testing.T, q *dbgen.Queries) dbgen.User {
 	require.False(t, user.DeletedAt.Valid)
 	return user
 }
+
+func createRandomMembership(t *testing.T, q *dbgen.Queries, r dbgen.MembershipRole, userID, estateID pgtype.UUID) dbgen.Membership {
+	ctx := context.Background()
+
+	args := dbgen.CreateMembershipParams{
+		EstateID: estateID,
+		UserID:   userID,
+		Role:     r,
+	}
+	membership, err := q.CreateMembership(ctx, args)
+	require.NoError(t, err)
+	require.NotEmpty(t, membership)
+	require.Equal(t, args.EstateID, membership.EstateID)
+	require.Equal(t, args.UserID, membership.UserID)
+	require.Equal(t, args.Role, membership.Role)
+	require.NotZero(t, membership.ID)
+	require.NotZero(t, membership.CreatedAt.Time)
+	require.NotZero(t, membership.UpdatedAt.Time)
+	return membership
+}
+
 func TestCreateUser(t *testing.T) {
 	q := WithTx(t)
 	createRandomUser(t, q)
@@ -96,4 +118,56 @@ func TestGetUserByPhone(t *testing.T) {
 	require.WithinDuration(t, user1.CreatedAt.Time, resUser.CreatedAt.Time, 0)
 	require.WithinDuration(t, user1.UpdatedAt.Time, resUser.UpdatedAt.Time, 0)
 	require.Equal(t, user1.DeletedAt.Time, resUser.DeletedAt.Time)
+}
+
+func TestListEstateMembershipForUser(t *testing.T) {
+	ctx := context.Background()
+	q := WithTx(t)
+	estate := createRandomEstate(t, q)
+	user := createRandomUser(t, q)
+
+	// A user may hold several roles in one estate, but (estate_id, user_id, role)
+	// is UNIQUE — so seed distinct roles, not duplicates.
+	roles := []dbgen.MembershipRole{
+		dbgen.MembershipRoleEstateAdmin,
+		dbgen.MembershipRoleLandlord,
+		dbgen.MembershipRoleResident,
+	}
+	for _, r := range roles {
+		createRandomMembership(t, q, r, user.ID, estate.ID)
+	}
+
+	memberships, err := q.ListEstateMembershipForUser(ctx, dbgen.ListEstateMembershipForUserParams{
+		UserID:   user.ID,
+		EstateID: estate.ID,
+	})
+	require.NoError(t, err)
+	require.Len(t, memberships, len(roles))
+	for _, m := range memberships {
+		require.Equal(t, user.ID, m.UserID)
+		require.Equal(t, estate.ID, m.EstateID)
+		require.Equal(t, dbgen.MembershipStatusActive, m.Status)
+	}
+}
+
+func TestCreateMembership(t *testing.T) {
+	q := WithTx(t)
+	user := createRandomUser(t, q)
+	estate := createRandomEstate(t, q)
+	createRandomMembership(t, q, dbgen.MembershipRoleLandlord, user.ID, estate.ID)
+}
+
+func TestSuspendMembershipById(t *testing.T) {
+	q := WithTx(t)
+	ctx := context.Background()
+	user := createRandomUser(t, q)
+	estate := createRandomEstate(t, q)
+	membership := createRandomMembership(t, q, dbgen.MembershipRoleLandlord, user.ID, estate.ID)
+
+	suspenededMemberShip, err := q.SuspendMembershipByID(ctx, membership.ID)
+	require.NoError(t, err)
+	require.Equal(t, user.ID, suspenededMemberShip.UserID)
+	require.Equal(t, estate.ID, suspenededMemberShip.EstateID)
+	require.Equal(t, suspenededMemberShip.Status, dbgen.MembershipStatusSuspended)
+
 }

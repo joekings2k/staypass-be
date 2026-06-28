@@ -1,0 +1,15 @@
+# Test & coverage artifacts
+cover.out
+*.out
+coverage.html
+
+# Build output
+/bin/
+/tmp/
+
+# Environment
+.env
+.env.local
+
+# OS / editor
+.DS_Store

@@ -11,6 +11,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createMembership = `-- name: CreateMembership :one
+INSERT INTO memberships (estate_id, user_id, role)
+VALUES ($1, $2, $3)
+RETURNING id, estate_id, user_id, role, status, created_at, updated_at, ended_at
+`
+
+type CreateMembershipParams struct {
+	EstateID pgtype.UUID    `json:"estate_id"`
+	UserID   pgtype.UUID    `json:"user_id"`
+	Role     MembershipRole `json:"role"`
+}
+
+// Create a new membership for a user
+func (q *Queries) CreateMembership(ctx context.Context, arg CreateMembershipParams) (Membership, error) {
+	row := q.db.QueryRow(ctx, createMembership, arg.EstateID, arg.UserID, arg.Role)
+	var i Membership
+	err := row.Scan(
+		&i.ID,
+		&i.EstateID,
+		&i.UserID,
+		&i.Role,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.EndedAt,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (phone, email, full_name, password_hash, is_super_admin)
 VALUES ($1, $2, $3, $4, $5)
@@ -226,4 +255,67 @@ func (q *Queries) SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHa
 		&i.DeletedAt,
 	)
 	return i, err
+}
+
+const suspendMembershipByID = `-- name: SuspendMembershipByID :one
+UPDATE memberships
+SET status = 'suspended'
+WHERE id = $1
+AND status = 'active'
+RETURNING id, estate_id, user_id, role, status, created_at, updated_at, ended_at
+`
+
+// Suspend a single membership for a user using the membership id
+func (q *Queries) SuspendMembershipByID(ctx context.Context, id pgtype.UUID) (Membership, error) {
+	row := q.db.QueryRow(ctx, suspendMembershipByID, id)
+	var i Membership
+	err := row.Scan(
+		&i.ID,
+		&i.EstateID,
+		&i.UserID,
+		&i.Role,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.EndedAt,
+	)
+	return i, err
+}
+
+const suspendMembershipForUser = `-- name: SuspendMembershipForUser :many
+UPDATE memberships
+SET status = 'suspended'
+WHERE user_id = $1
+AND status = 'active'
+RETURNING id, estate_id, user_id, role, status, created_at, updated_at, ended_at
+`
+
+// Suspend a single membership (reversible). Only acts on active memberships.
+func (q *Queries) SuspendMembershipForUser(ctx context.Context, userID pgtype.UUID) ([]Membership, error) {
+	rows, err := q.db.Query(ctx, suspendMembershipForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Membership
+	for rows.Next() {
+		var i Membership
+		if err := rows.Scan(
+			&i.ID,
+			&i.EstateID,
+			&i.UserID,
+			&i.Role,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.EndedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

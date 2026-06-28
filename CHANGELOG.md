@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     feat: -> Added   fix: -> Fixed   anything else -> Changed
 -->
 
+## [Unreleased]
+
+### Added
+
+- Membership write queries: `CreateMembership` (link a user, estate, and role), `SuspendMembershipByID` (suspend one active membership by id), and `SuspendMembershipForUser` (suspend all active memberships for a user). (2026-06-28)
+- Membership integration tests: `createRandomMembership` helper, `TestCreateMembership`, `TestListEstateMembershipForUser` (seeds distinct roles to respect the `UNIQUE (estate_id, user_id, role)` constraint), and `TestSuspendMembershipById`. (2026-06-28)
+- Session integration tests in `sessions_test.go`: `createRandomSession` helper, `TestCreateSession`, and `TestGetSessionById`. (2026-06-28)
+
+### Changed
+
+- stop tracking .env (2026-06-28)
+### Fixed
+
 ## [1.0.0]-(2026-06-18)
 
 ### Added
