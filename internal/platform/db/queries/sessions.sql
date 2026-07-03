@@ -10,6 +10,12 @@ RETURNING *;
 SELECT * FROM sessions
 WHERE id = $1 AND revoked_at IS NULL;
 
+-- name: GetSessionByUserId :many
+-- Get a session by the usersID. Exclude revoked sessions.
+SELECT * FROM sessions
+WHERE user_id = $1 
+AND revoked_at IS NULL;
+
 
 -- name: GetActiveSessionByTokenHash :one
 -- Get an active session by the hash of its refresh token. Exclude revoked sessions.

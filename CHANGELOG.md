@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+- Session and account-claim-token integration tests in `sessions_test.go`: sessions (`TestCreateSession`, `TestGetSessionById`, `TestGetSessionByUserId`, `TestRevokeSession`, `TestRevokeAllSessionsForUser`), active-session lookups including not-found and expired negative cases, and claim tokens (`TestCreateAccountClaimToken`, `TestGetActiveClaimToken`). (2026-07-03)
+- `GetSessionByUserId` (`:many`) query and regenerated sqlc output. (2026-07-03)
+- `utils.RandomNumber` helper to spread session fixtures across users. (2026-07-03)
+
+### Fixed
+
+## [1.1.0] - 2026-06-28
+
+### Added
+
+- add membership queries and identity/session query tests (2026-06-28)
 - Membership write queries: `CreateMembership` (link a user, estate, and role), `SuspendMembershipByID` (suspend one active membership by id), and `SuspendMembershipForUser` (suspend all active memberships for a user). (2026-06-28)
 - Membership integration tests: `createRandomMembership` helper, `TestCreateMembership`, `TestListEstateMembershipForUser` (seeds distinct roles to respect the `UNIQUE (estate_id, user_id, role)` constraint), and `TestSuspendMembershipById`. (2026-06-28)
 - Session integration tests in `sessions_test.go`: `createRandomSession` helper, `TestCreateSession`, and `TestGetSessionById`. (2026-06-28)

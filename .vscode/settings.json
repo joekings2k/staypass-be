@@ -1,0 +1,19 @@
+{
+  // Collect coverage automatically every time tests run on save.
+  "go.coverOnSave": true,
+  "go.coverOnSingleTest": true,
+  "go.coverOnSingleTestFile": true,
+
+  // Measure coverage of the generated query package, not just the test package.
+  // Without this, coverage shows ~0% because the tests live in `dbtest`
+  // but the code under test lives in `db/gen`.
+  "go.testFlags": ["-coverpkg=./internal/platform/db/gen"],
+
+  // Show green/red highlighting in the gutter and on covered/uncovered lines.
+  "go.coverageDecorator": {
+    "type": "highlight",
+    "coveredHighlightColor": "rgba(64,128,64,0.5)",
+    "uncoveredHighlightColor": "rgba(128,64,64,0.5)"
+  },
+  "go.coverageOptions": "showBothCoveredAndUncoveredCode"
+}

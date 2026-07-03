@@ -158,6 +158,42 @@ func (q *Queries) GetSessionById(ctx context.Context, id pgtype.UUID) (Session, 
 	return i, err
 }
 
+const getSessionByUserId = `-- name: GetSessionByUserId :many
+SELECT id, user_id, refresh_token_hash, user_agent, ip, expires_at, revoked_at, created_at FROM sessions
+WHERE user_id = $1 
+AND revoked_at IS NULL
+`
+
+// Get a session by the usersID. Exclude revoked sessions.
+func (q *Queries) GetSessionByUserId(ctx context.Context, userID pgtype.UUID) ([]Session, error) {
+	rows, err := q.db.Query(ctx, getSessionByUserId, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Session
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.RefreshTokenHash,
+			&i.UserAgent,
+			&i.Ip,
+			&i.ExpiresAt,
+			&i.RevokedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markClaimTokenUsed = `-- name: MarkClaimTokenUsed :exec
 UPDATE account_claim_tokens
 SET used_at = now()
