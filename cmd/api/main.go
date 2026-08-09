@@ -11,12 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joekings2k/staypass-be/internal/onboarding"
 	"github.com/joekings2k/staypass-be/internal/platform/config"
 	"github.com/joekings2k/staypass-be/internal/platform/database"
+	"github.com/joekings2k/staypass-be/internal/platform/hash"
+	"github.com/joekings2k/staypass-be/internal/server"
 )
 
 func main() {
@@ -37,25 +37,19 @@ func main() {
 	}
 	defer pool.Close()
 
-	r := chi.NewRouter()
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Recoverer)
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   cfg.CorsAllowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Authorization", "Content-Type"},
-		ExposedHeaders:   []string{"Retry-After"},
-		AllowCredentials: true,
-		MaxAge:           300,
-	}))
-	r.Use(middleware.Timeout(30 * time.Second))
+	hasher := hash.NewBcryptHasher()
+	tx := database.NewTransactionRunner(pool)
 
-	r.Get("/health", handleHealth(pool))
+	onboardingService := onboarding.NewOnboardingService(tx, hasher)
+	onboardingHandler := onboarding.NewHandler(onboardingService)
+
+	appServer := server.New(cfg, server.Handlers{
+		Onboarding: onboardingHandler,
+	}, handleHealth(pool))
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.AppPort,
-		Handler:           r,
+		Handler:           appServer.Router(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
