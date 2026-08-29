@@ -21,3 +21,10 @@ SELECT count(*) FROM estates;
 INSERT INTO estates (name, slug, address, city, state, timezone)
 VALUES (@name, @slug, @address, @city, @state, @timezone)
 RETURNING *;
+
+-- name: SetEstateActive :one
+-- Enable or disable an estate. Memberships are left untouched is fully reversible
+UPDATE estates
+SET is_active = @is_active
+WHERE id = @id
+RETURNING *;

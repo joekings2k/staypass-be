@@ -1,20 +1,28 @@
 package onboarding
 
 import (
-	"errors"
+	"context"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/joekings2k/staypass-be/internal/estate"
+	"github.com/joekings2k/staypass-be/internal/membership"
+	"github.com/joekings2k/staypass-be/internal/platform/utils"
 	"github.com/joekings2k/staypass-be/internal/platform/web"
 	"github.com/joekings2k/staypass-be/internal/user"
 )
 
-type Handler struct{ service *OnboardingService }
+type OnboardingServicer interface {
+	Register(
+		ctx context.Context,
+		params RegisterParams,
+	) (*estate.Estate, *user.User, *membership.Membership, error)
+}
+type Handler struct{ service OnboardingServicer }
 
-func NewHandler(s *OnboardingService) *Handler {
+func NewHandler(s OnboardingServicer) *Handler {
 	return &Handler{
 		service: s,
 	}
@@ -32,7 +40,6 @@ type registerEstateRequest struct {
 	Phone      string `json:"phone" validate:"required,min=8"`
 	Password   string `json:"password" validate:"required,min=8,max=30"`
 	EstateName string `json:"estateName" validate:"required"`
-	Slug       string `json:"slug"       validate:"required"`
 	Address    string `json:"address"`
 	City       string `json:"city"`
 	State      string `json:"state"`
@@ -56,7 +63,7 @@ func (h *Handler) RegisterEstate(w http.ResponseWriter, r *http.Request) {
 		Password:   req.Password,
 		Email:      req.Email,
 		EstateName: req.EstateName,
-		Slug:       req.Slug,
+		Slug:       utils.GenerateSlug(req.EstateName),
 		Address:    req.Address,
 		City:       req.City,
 		State:      req.State,
@@ -64,14 +71,7 @@ func (h *Handler) RegisterEstate(w http.ResponseWriter, r *http.Request) {
 
 	e, u, _, err := h.service.Register(r.Context(), params)
 	if err != nil {
-		switch {
-		case errors.Is(err, user.ErrEmailTaken):
-			web.Conflict(w, "email already registered")
-		case errors.Is(err, estate.ErrEstateAlreadyExists):
-			web.Conflict(w, "estate already exists")
-		default:
-			web.ServerError(w, r, err)
-		}
+		web.RespondWithError(w, r, err)
 		return
 	}
 

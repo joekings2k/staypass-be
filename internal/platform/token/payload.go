@@ -15,12 +15,11 @@ var (
 type Payload struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID
-	role      string
-	ISsuedAt  time.Time
+	IssuedAt  time.Time
 	ExpiresAt time.Time
 }
 
-func NewPayload(userID uuid.UUID, role string, duration time.Duration) (*Payload, error) {
+func NewPayload(userID uuid.UUID, duration time.Duration) (*Payload, error) {
 	id, err := uuid.NewRandom()
 	if err != nil {
 		return nil, err
@@ -31,15 +30,14 @@ func NewPayload(userID uuid.UUID, role string, duration time.Duration) (*Payload
 	payload := &Payload{
 		ID:        id,
 		UserID:    userID,
-		role:      role,
-		ISsuedAt:  issuedAt,
+		IssuedAt:  issuedAt,
 		ExpiresAt: expiresAt,
 	}
 
 	return payload, nil
 }
 
-func (p *Payload) valid() error {
+func (p *Payload) Valid() error {
 	if time.Now().After(p.ExpiresAt) {
 		return ErrExpiredToken
 	}

@@ -152,3 +152,34 @@ func (q *Queries) ListEstates(ctx context.Context, arg ListEstatesParams) ([]Est
 	}
 	return items, nil
 }
+
+const setEstateActive = `-- name: SetEstateActive :one
+UPDATE estates
+SET is_active = $1
+WHERE id = $2
+RETURNING id, name, slug, address, city, state, timezone, is_active, created_at, updated_at
+`
+
+type SetEstateActiveParams struct {
+	IsActive bool        `json:"is_active"`
+	ID       pgtype.UUID `json:"id"`
+}
+
+// Enable or disable an estate. Memberships are left untouched is fully reversible
+func (q *Queries) SetEstateActive(ctx context.Context, arg SetEstateActiveParams) (Estate, error) {
+	row := q.db.QueryRow(ctx, setEstateActive, arg.IsActive, arg.ID)
+	var i Estate
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Address,
+		&i.City,
+		&i.State,
+		&i.Timezone,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

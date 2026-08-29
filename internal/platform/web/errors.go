@@ -1,10 +1,14 @@
 package web
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/joekings2k/staypass-be/internal/estate"
+	"github.com/joekings2k/staypass-be/internal/user"
 )
 
 func Error(w http.ResponseWriter, status int, code, message string) {
@@ -49,4 +53,26 @@ func ServerError(w http.ResponseWriter, r *http.Request, err error) {
 		"request_id", middleware.GetReqID(r.Context()),
 	)
 	Internal(w)
+}
+
+func RespondWithError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, estate.ErrEstateNotFound):
+		NotFound(w, "estate not found")
+
+	case errors.Is(err, estate.ErrInvalidEstateData):
+		BadRequest(w, "invalid estate data")
+
+	case errors.Is(err, estate.ErrReferenceRecordNotFound):
+		NotFound(w, "reference record not found")
+
+	case errors.Is(err, user.ErrUserNotFound):
+		NotFound(w, "user not found")
+
+		// case errors.Is(err, auth.ErrInvalidToken):
+		//     Unauthorized(w, "invalid token")
+	// }
+	default:
+		ServerError(w, r, err)
+	}
 }

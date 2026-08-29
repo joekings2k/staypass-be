@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	dbgen "github.com/joekings2k/staypass-be/internal/platform/db/gen"
 )
 
@@ -103,5 +105,12 @@ func toDomainEstate(dbEstate dbgen.Estate) *Estate {
 }
 
 func (r *pgEstateRepository) FindEstateByID(ctx context.Context, id uuid.UUID) (*Estate, error) {
-	return nil, nil
+	dbEstate, err := r.db.GetEstateByID(ctx, pgtype.UUID{Bytes: id, Valid: true})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrEstateNotFound
+		}
+		return nil, err
+	}
+	return toDomainEstate(dbEstate), nil
 }

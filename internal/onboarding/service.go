@@ -105,3 +105,7 @@ func (s *OnboardingService) Register(ctx context.Context, params RegisterParams)
 	return resultEstate, resultUser, resultMembership, nil
 
 }
+
+func (s *OnboardingService) Login(ctx context.Context, params RegisterParams) (*estate.Estate, *user.User, *membership.Membership, error) {
+	return nil, nil, nil, nil
+}

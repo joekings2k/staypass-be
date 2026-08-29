@@ -190,6 +190,62 @@ func (q *Queries) ListEstateMembershipForUser(ctx context.Context, arg ListEstat
 	return items, nil
 }
 
+const listUserEstateMemberships = `-- name: ListUserEstateMemberships :many
+SELECT memberships.id, memberships.estate_id, memberships.user_id, memberships.role, memberships.status, memberships.created_at, memberships.updated_at, memberships.ended_at, estates.id, estates.name, estates.slug, estates.address, estates.city, estates.state, estates.timezone, estates.is_active, estates.created_at, estates.updated_at
+FROM memberships
+JOIN estates ON memberships.estate_id = estates.id
+WHERE memberships.user_id = $1
+AND memberships.status = 'active'
+AND estates.is_active = true
+ORDER BY estates.name, memberships.created_at
+`
+
+type ListUserEstateMembershipsRow struct {
+	Membership Membership `json:"membership"`
+	Estate     Estate     `json:"estate"`
+}
+
+// Every Active membership for a given user, with its estate attached - power
+// post-login estate picker in one round trip.
+func (q *Queries) ListUserEstateMemberships(ctx context.Context, userID pgtype.UUID) ([]ListUserEstateMembershipsRow, error) {
+	rows, err := q.db.Query(ctx, listUserEstateMemberships, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUserEstateMembershipsRow
+	for rows.Next() {
+		var i ListUserEstateMembershipsRow
+		if err := rows.Scan(
+			&i.Membership.ID,
+			&i.Membership.EstateID,
+			&i.Membership.UserID,
+			&i.Membership.Role,
+			&i.Membership.Status,
+			&i.Membership.CreatedAt,
+			&i.Membership.UpdatedAt,
+			&i.Membership.EndedAt,
+			&i.Estate.ID,
+			&i.Estate.Name,
+			&i.Estate.Slug,
+			&i.Estate.Address,
+			&i.Estate.City,
+			&i.Estate.State,
+			&i.Estate.Timezone,
+			&i.Estate.IsActive,
+			&i.Estate.CreatedAt,
+			&i.Estate.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUserMembershipsForUser = `-- name: ListUserMembershipsForUser :many
 SELECT id, estate_id, user_id, role, status, created_at, updated_at, ended_at FROM memberships
 WHERE user_id = $1

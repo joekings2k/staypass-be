@@ -66,3 +66,15 @@ SET status = 'suspended'
 WHERE user_id = @user_id
 AND status = 'active'
 RETURNING *;
+
+
+-- name: ListUserEstateMemberships :many
+-- Every Active membership for a given user, with its estate attached - power
+-- post-login estate picker in one round trip.
+SELECT sqlc.embed(memberships), sqlc.embed(estates)
+FROM memberships
+JOIN estates ON memberships.estate_id = estates.id
+WHERE memberships.user_id = @user_id
+AND memberships.status = 'active'
+AND estates.is_active = true
+ORDER BY estates.name, memberships.created_at ;

@@ -28,7 +28,8 @@ type registerRequest struct {
 func (h Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req registerRequest
 	if err := web.DecodeAndValidate(w, r, &req); err != nil {
-		web.BadRequest(w, "invalid request")
+		web.RespondWithError(w, r, err)
+		return
 	}
 
 	err := h.service.Register(r.Context(), RegisterParams{

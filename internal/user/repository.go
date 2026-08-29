@@ -5,11 +5,11 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	dbgen "github.com/joekings2k/staypass-be/internal/platform/db/gen"
-	uuid "github.com/vgarvardt/pgx-google-uuid/v5"
 )
 
 type User struct {
@@ -17,6 +17,7 @@ type User struct {
 	Phone        string
 	Email        *string
 	FullName     string
+	PasswordHash *string
 	IsSuperAdmin bool
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
@@ -33,6 +34,7 @@ type UserRepository interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (*User, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	CreateUser(ctx context.Context, params CreateUserParams) (*User, error)
+	GetUserByPhone(ctx context.Context, phone string) (*User, error)
 }
 
 type pgUserRepository struct {
@@ -77,6 +79,7 @@ func ToDomainUser(dbUser dbgen.User) *User {
 		ID:           dbUser.ID.Bytes,
 		Phone:        dbUser.Phone,
 		Email:        dbUser.Email,
+		PasswordHash: dbUser.PasswordHash,
 		FullName:     dbUser.FullName,
 		IsSuperAdmin: dbUser.IsSuperAdmin,
 		CreatedAt:    dbUser.CreatedAt.Time,
@@ -107,6 +110,17 @@ func (r *pgUserRepository) CreateUser(ctx context.Context, params CreateUserPara
 		return nil, err
 	}
 	return ToDomainUser(createdUser), nil
+}
+
+func (r *pgUserRepository) GetUserByPhone(ctx context.Context, phone string) (*User, error) {
+	dbUser, err := r.db.GetUserByPhone(ctx, phone)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	return ToDomainUser(dbUser), nil
 }
 
 func toCreateUserParams(params CreateUserParams) dbgen.CreateUserParams {

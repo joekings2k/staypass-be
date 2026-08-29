@@ -36,6 +36,9 @@ type CreateSessionParams struct {
 // implementation; callers do not change.
 type AuthRepository interface {
 	CreateSession(ctx context.Context, params CreateSessionParams) (Session, error)
+	GetActiveSessionByTokenHash(ctx context.Context, tokenHash string) (Session, error)
+	RevokeSession(ctx context.Context, sessionID uuid.UUID) error
+	RevokeAllSessionsForUser(ctx context.Context, userID uuid.UUID) error
 }
 
 type pgAuthRepository struct {
@@ -54,6 +57,21 @@ func (r *pgAuthRepository) CreateSession(ctx context.Context, params CreateSessi
 		return Session{}, err
 	}
 	return toDomainSession(dbSession), nil
+}
+func (r *pgAuthRepository) GetActiveSessionByTokenHash(ctx context.Context, tokenHash string) (Session, error) {
+	dbSession, err := r.queries.GetActiveSessionByTokenHash(ctx, tokenHash)
+	if err != nil {
+		return Session{}, err
+	}
+	return toDomainSession(dbSession), nil
+}
+
+func (r *pgAuthRepository) RevokeSession(ctx context.Context, sessionID uuid.UUID) error {
+	return r.queries.RevokeSession(ctx, pgtype.UUID{Bytes: sessionID, Valid: true})
+}
+
+func (r *pgAuthRepository) RevokeAllSessionsForUser(ctx context.Context, userID uuid.UUID) error {
+	return r.queries.RevokeAllSessionsForUser(ctx, pgtype.UUID{Bytes: userID, Valid: true})
 }
 
 // --- mapping helpers: the only place pgx/sqlc types touch the auth package ---
