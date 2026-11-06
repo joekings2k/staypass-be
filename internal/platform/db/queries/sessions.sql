@@ -24,6 +24,15 @@ WHERE refresh_token_hash = $1
 AND revoked_at IS NULL 
 AND expires_at > now();   
 
+-- name: GetActiveSessionUserByTokenHash :one 
+-- Get an active session by the hash of its refresh token and userid. Exclude revoked sessions.
+SELECT * FROM sessions
+WHERE refresh_token_hash = $1
+AND user_id = $2
+AND revoked_at IS NULL 
+AND expires_at > now();   
+
+
 -- name: RevokeSession :exec
 -- Revoke a session by its ID.
 UPDATE sessions
@@ -66,3 +75,13 @@ UPDATE account_claim_tokens
 SET used_at = now()
 WHERE id = @id
 AND used_at IS NULL;
+
+
+-- name: ConsumeAccountClaimToken :one
+-- consume an claim token
+UPDATE  account_claim_tokens
+SET used_at = now()
+WHERE token_hash = $1
+AND used_at IS NULL
+AND expires_at > now()
+RETURNING *;

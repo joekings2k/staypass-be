@@ -78,6 +78,39 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const getMembershipForUserByEstateID = `-- name: GetMembershipForUserByEstateID :many
+SELECT role FROM memberships
+WHERE user_id = $1
+AND estate_id = $2
+AND status = 'active'
+`
+
+type GetMembershipForUserByEstateIDParams struct {
+	UserID   pgtype.UUID `json:"user_id"`
+	EstateID pgtype.UUID `json:"estate_id"`
+}
+
+// Get a membership for a user by their estate id
+func (q *Queries) GetMembershipForUserByEstateID(ctx context.Context, arg GetMembershipForUserByEstateIDParams) ([]MembershipRole, error) {
+	rows, err := q.db.Query(ctx, getMembershipForUserByEstateID, arg.UserID, arg.EstateID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MembershipRole
+	for rows.Next() {
+		var role MembershipRole
+		if err := rows.Scan(&role); err != nil {
+			return nil, err
+		}
+		items = append(items, role)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, phone, email, full_name, password_hash, is_super_admin, created_at, updated_at, deleted_at FROM users
 WHERE email = $1 AND deleted_at IS NULL

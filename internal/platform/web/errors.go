@@ -1,14 +1,12 @@
 package web
 
 import (
-	"errors"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/joekings2k/staypass-be/internal/estate"
-	"github.com/joekings2k/staypass-be/internal/user"
+	"github.com/joekings2k/staypass-be/internal/app"
 )
 
 func Error(w http.ResponseWriter, status int, code, message string) {
@@ -35,16 +33,10 @@ func Conflict(w http.ResponseWriter, msg string) {
 	Error(w, http.StatusConflict, "conflict", msg)
 }
 
-// Internal deliberately hides the real error from the client. Log the
-// underlying err in your handler or middleware; never leak it in the body.
 func Internal(w http.ResponseWriter) {
 	Error(w, http.StatusInternalServerError, "internal", "something went wrong")
 }
 
-// ServerError logs the real error (with the request id and route so it can be
-// traced) and then returns the generic 500 to the client. Use this for any
-// unexpected error path instead of calling Internal directly, so no 500 ever
-// goes unlogged.
 func ServerError(w http.ResponseWriter, r *http.Request, err error) {
 	slog.Error("internal server error",
 		"error", err,
@@ -55,24 +47,65 @@ func ServerError(w http.ResponseWriter, r *http.Request, err error) {
 	Internal(w)
 }
 
-func RespondWithError(w http.ResponseWriter, r *http.Request, err error) {
-	switch {
-	case errors.Is(err, estate.ErrEstateNotFound):
-		NotFound(w, "estate not found")
-
-	case errors.Is(err, estate.ErrInvalidEstateData):
-		BadRequest(w, "invalid estate data")
-
-	case errors.Is(err, estate.ErrReferenceRecordNotFound):
-		NotFound(w, "reference record not found")
-
-	case errors.Is(err, user.ErrUserNotFound):
-		NotFound(w, "user not found")
-
-		// case errors.Is(err, auth.ErrInvalidToken):
-		//     Unauthorized(w, "invalid token")
-	// }
+func statusFor(k app.Kind) int {
+	switch k {
+	case app.KindInvalid:
+		return http.StatusBadRequest
+	case app.KindNotFound:
+		return http.StatusNotFound
+	case app.KindConflict:
+		return http.StatusConflict
+	case app.KindUnauthorized:
+		return http.StatusUnauthorized
+	case app.KindForbidden:
+		return http.StatusForbidden
+	case app.KindUnavailable:
+		return http.StatusServiceUnavailable
 	default:
-		ServerError(w, r, err)
+		return http.StatusInternalServerError
 	}
+}
+
+func codeFor(k app.Kind) string {
+	switch k {
+	case app.KindInvalid:
+		return "bad_request"
+	case app.KindNotFound:
+		return "not_found"
+	case app.KindConflict:
+		return "conflict"
+	case app.KindUnauthorized:
+		return "unauthorized"
+	case app.KindForbidden:
+		return "forbidden"
+	case app.KindUnavailable:
+		return "unavailable"
+	default:
+		return "internal"
+	}
+}
+
+func RespondWithError(w http.ResponseWriter, r *http.Request, err error) {
+	appErr, ok := app.From(err)
+	if !ok || appErr.Kind == app.KindInternal {
+
+		ServerError(w, r, err)
+		return
+	}
+
+	if appErr.Err != nil {
+		slog.Warn("request failed",
+			"error", appErr.Err,
+			"kind", appErr.Kind.String(),
+			"method", r.Method,
+			"path", r.URL.Path,
+			"request_id", middleware.GetReqID(r.Context()),
+		)
+	}
+
+	code := appErr.Code
+	if code == "" {
+		code = codeFor(appErr.Kind)
+	}
+	Error(w, statusFor(appErr.Kind), code, appErr.Message)
 }

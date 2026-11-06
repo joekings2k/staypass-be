@@ -30,6 +30,14 @@ type CreateSessionParams struct {
 	ExpiresAt        time.Time
 }
 
+type AccountClaimToken struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	TokenHash string
+	UsedAt    time.Time
+	ExpiredAt time.Time
+}
+
 // AuthRepository is the storage boundary for the auth layer. It is defined in
 // terms of domain types only, so the service depends on this interface rather
 // than on any particular database. Swapping databases means writing a new
@@ -37,8 +45,10 @@ type CreateSessionParams struct {
 type AuthRepository interface {
 	CreateSession(ctx context.Context, params CreateSessionParams) (Session, error)
 	GetActiveSessionByTokenHash(ctx context.Context, tokenHash string) (Session, error)
+	GetActiveSessionUserByTokenHash(ctx context.Context, tokenHash string, userID uuid.UUID) (Session, error)
 	RevokeSession(ctx context.Context, sessionID uuid.UUID) error
 	RevokeAllSessionsForUser(ctx context.Context, userID uuid.UUID) error
+	ConsumeAccountClaimTokne(ctx context.Context, tokenHash string) (AccountClaimToken, error)
 }
 
 type pgAuthRepository struct {
@@ -74,6 +84,26 @@ func (r *pgAuthRepository) RevokeAllSessionsForUser(ctx context.Context, userID 
 	return r.queries.RevokeAllSessionsForUser(ctx, pgtype.UUID{Bytes: userID, Valid: true})
 }
 
+func (r *pgAuthRepository) GetActiveSessionUserByTokenHash(ctx context.Context, tokenHash string, userID uuid.UUID) (Session, error) {
+	arg := dbgen.GetActiveSessionUserByTokenHashParams{
+		RefreshTokenHash: tokenHash,
+		UserID:           pgtype.UUID{Bytes: userID, Valid: true},
+	}
+	dbSession, err := r.queries.GetActiveSessionUserByTokenHash(ctx, arg)
+	if err != nil {
+		return Session{}, err
+	}
+	return toDomainSession(dbSession), nil
+}
+
+func (r *pgAuthRepository) ConsumeAccountClaimTokne(ctx context.Context, tokenHash string) (AccountClaimToken, error) {
+	accountCliamTokenResult, err := r.queries.ConsumeAccountClaimToken(ctx, tokenHash)
+	if err != nil {
+		return AccountClaimToken{}, err
+	}
+	return toDomainAccountClaim(accountCliamTokenResult), nil
+}
+
 // --- mapping helpers: the only place pgx/sqlc types touch the auth package ---
 
 func toDBCreateSessionParams(p CreateSessionParams) dbgen.CreateSessionParams {
@@ -98,4 +128,15 @@ func toDomainSession(s dbgen.Session) Session {
 		session.RevokedAt = &revokedAt
 	}
 	return session
+}
+
+func toDomainAccountClaim(claim dbgen.AccountClaimToken) AccountClaimToken {
+	accountClaimToken := AccountClaimToken{
+		ID:        uuid.UUID(claim.ID.Bytes),
+		UserID:    uuid.UUID(claim.UserID.Bytes),
+		TokenHash: claim.TokenHash,
+		UsedAt:    claim.UsedAt.Time,
+		ExpiredAt: claim.ExpiresAt.Time,
+	}
+	return accountClaimToken
 }

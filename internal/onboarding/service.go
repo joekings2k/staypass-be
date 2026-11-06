@@ -10,7 +10,7 @@ import (
 	"github.com/joekings2k/staypass-be/internal/platform/database"
 	dbgen "github.com/joekings2k/staypass-be/internal/platform/db/gen"
 	"github.com/joekings2k/staypass-be/internal/platform/hash"
-	"github.com/joekings2k/staypass-be/internal/platform/web"
+	"github.com/joekings2k/staypass-be/internal/platform/logger"
 	"github.com/joekings2k/staypass-be/internal/user"
 )
 
@@ -39,7 +39,7 @@ type RegisterParams struct {
 }
 
 func (s *OnboardingService) Register(ctx context.Context, params RegisterParams) (*estate.Estate, *user.User, *membership.Membership, error) {
-	log := web.LoggerFrom(ctx).With("op", "onboarding.Register", "slug", params.Slug)
+	log := logger.LoggerFrom(ctx).With("op", "onboarding.Register", "slug", params.Slug)
 	log.Info("starting estate onboarding", "estate_name", params.EstateName, "email", params.Email)
 
 	hashedPassword, err := s.Hasher.Hash(params.Password)

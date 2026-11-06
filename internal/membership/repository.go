@@ -47,7 +47,7 @@ type MembershipRepository interface {
 	CreateMembership(context.Context, CreateMembershipParams) (*Membership, error)
 	ListEstateMembersipForUser(ctx context.Context, userID uuid.UUID) ([]*Membership, error)
 	ListUserEstateMemberships(ctx context.Context, userID uuid.UUID) ([]UserEstatesAndRoles, error) // this list all the memberships for a user across all estates with his estates
-
+	GetEstateRolesForUser(ctx context.Context, params GetEstateRolesForUserParams) (GetEstateRolesForUserResult, error)
 }
 type pgMembershipRepository struct {
 	db *dbgen.Queries
@@ -150,21 +150,44 @@ func groupByEstate(rows []dbgen.ListUserEstateMembershipsRow) []UserEstatesAndRo
 }
 
 // grouped := make(map[uuid.UUID]*UserEstatesAndRoles)
-// 	for _, row := range rows {
-// 		estateID := row.Membership.EstateID.Bytes
-// 		if exisiting, ok := grouped[estateID]; ok {
-// 			exisiting.Roles = append(exisiting.Roles, MembershipRole(row.Membership.Role))
-// 			continue
-// 		}
-// 		grouped[estateID] = &UserEstatesAndRoles{
-// 			EstateName: row.Estate.Name,
-// 			Roles: []MembershipRole{
-// 				MembershipRole(row.Membership.Role),
-// 			},
-// 		}
-// 	}
-// 	result := make([]UserEstatesAndRoles, 0, len(grouped))
-// 	for _, estate := range grouped {
-// 		result = append(result, *estate)
-// 	}
-// 	return result
+//
+//	for _, row := range rows {
+//		estateID := row.Membership.EstateID.Bytes
+//		if exisiting, ok := grouped[estateID]; ok {
+//			exisiting.Roles = append(exisiting.Roles, MembershipRole(row.Membership.Role))
+//			continue
+//		}
+//		grouped[estateID] = &UserEstatesAndRoles{
+//			EstateName: row.Estate.Name,
+//			Roles: []MembershipRole{
+//				MembershipRole(row.Membership.Role),
+//			},
+//		}
+//	}
+//	result := make([]UserEstatesAndRoles, 0, len(grouped))
+//	for _, estate := range grouped {
+//		result = append(result, *estate)
+//	}
+//	return result
+type GetEstateRolesForUserParams struct {
+	UserID   uuid.UUID
+	EstateID uuid.UUID
+}
+type GetEstateRolesForUserResult struct {
+	Roles []MembershipRole
+}
+
+func (r *pgMembershipRepository) GetEstateRolesForUser(ctx context.Context, params GetEstateRolesForUserParams) (GetEstateRolesForUserResult, error) {
+	dbRoles, err := r.db.GetMembershipForUserByEstateID(ctx, dbgen.GetMembershipForUserByEstateIDParams{
+		UserID:   pgtype.UUID{Bytes: params.UserID, Valid: true},
+		EstateID: pgtype.UUID{Bytes: params.EstateID, Valid: true},
+	})
+	if err != nil {
+		return GetEstateRolesForUserResult{}, err
+	}
+	roles := make([]MembershipRole, len(dbRoles))
+	for i, role := range dbRoles {
+		roles[i] = MembershipRole(role)
+	}
+	return GetEstateRolesForUserResult{Roles: roles}, nil
+}

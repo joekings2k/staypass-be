@@ -9,15 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
-	dbgen "github.com/joekings2k/staypass-be/internal/platform/db/gen"
-)
 
-var (
-	ErrEstateAlreadyExists     = errors.New("estate already exsists")
-	ErrinternalServerError     = errors.New("internal server error")
-	ErrEstateNotFound          = errors.New("estate not found")
-	ErrInvalidEstateData       = errors.New("invalid estate data")
-	ErrReferenceRecordNotFound = errors.New("reference record not found")
+	dbgen "github.com/joekings2k/staypass-be/internal/platform/db/gen"
 )
 
 type Estate struct {

@@ -12,11 +12,17 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joekings2k/staypass-be/internal/auth"
+	"github.com/joekings2k/staypass-be/internal/membership"
 	"github.com/joekings2k/staypass-be/internal/onboarding"
 	"github.com/joekings2k/staypass-be/internal/platform/config"
 	"github.com/joekings2k/staypass-be/internal/platform/database"
+	dbgen "github.com/joekings2k/staypass-be/internal/platform/db/gen"
 	"github.com/joekings2k/staypass-be/internal/platform/hash"
+	"github.com/joekings2k/staypass-be/internal/platform/logger"
+	"github.com/joekings2k/staypass-be/internal/platform/token"
 	"github.com/joekings2k/staypass-be/internal/server"
+	"github.com/joekings2k/staypass-be/internal/user"
 )
 
 func main() {
@@ -27,25 +33,40 @@ func main() {
 	}
 	ctx := context.Background()
 
-	logger := newLogger(cfg)
-	slog.SetDefault(logger)
+	log := logger.NewLogger(cfg)
+	slog.SetDefault(log)
 
 	pool, err := database.New(ctx, cfg.DatabaseURL)
+
 	if err != nil {
-		logger.Error("failed to create database pool", "error", err)
+		log.Error("failed to create database pool", "error", err)
 		os.Exit(1)
 	}
 	defer pool.Close()
 
-	hasher := hash.NewBcryptHasher()
+	q := dbgen.New(pool)
 	tx := database.NewTransactionRunner(pool)
+
+	tokenMaker, err := token.NewPasetoMaker(cfg.TokenSymmetricKey)
+	if err != nil {
+		log.Error("failed to create token maker", "error", err)
+		os.Exit(1)
+	}
+	hasher := hash.NewBcryptHasher()
+	authRepository := auth.NewPgAuthRepository(q)
+	userRepository := user.NewPgUserRepository(q)
+	membershipRepository := membership.NewMembershipRepository(q)
+
+	authService := auth.NewAuthService(authRepository, userRepository, membershipRepository, cfg, hasher, tokenMaker, tx)
+	authHandler := auth.NewHandlerService(authService)
 
 	onboardingService := onboarding.NewOnboardingService(tx, hasher)
 	onboardingHandler := onboarding.NewHandler(onboardingService)
 
 	appServer := server.New(cfg, server.Handlers{
 		Onboarding: onboardingHandler,
-	}, handleHealth(pool))
+		Auth:       authHandler,
+	}, handleHealth(pool), tokenMaker)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.AppPort,
@@ -75,18 +96,6 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("shutdown failed", "error", err)
 	}
-}
-
-func newLogger(cfg *config.Config) *slog.Logger {
-	level := slog.LevelDebug
-	if cfg.IsProduction() {
-		level = slog.LevelInfo
-	}
-
-	if cfg.IsProduction() {
-		return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
-	}
-	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
 }
 
 func handleHealth(pool *pgxpool.Pool) http.HandlerFunc {

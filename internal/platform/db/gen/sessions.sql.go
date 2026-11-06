@@ -12,6 +12,30 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const consumeAccountClaimToken = `-- name: ConsumeAccountClaimToken :one
+UPDATE  account_claim_tokens
+SET used_at = now()
+WHERE token_hash = $1
+AND used_at IS NULL
+AND expires_at > now()
+RETURNING id, user_id, token_hash, expires_at, used_at, created_at
+`
+
+// consume an claim token
+func (q *Queries) ConsumeAccountClaimToken(ctx context.Context, tokenHash string) (AccountClaimToken, error) {
+	row := q.db.QueryRow(ctx, consumeAccountClaimToken, tokenHash)
+	var i AccountClaimToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.UsedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createAccountClaimToken = `-- name: CreateAccountClaimToken :one
 
 
@@ -122,6 +146,36 @@ AND expires_at > now()
 // Get an active session by the hash of its refresh token. Exclude revoked sessions.
 func (q *Queries) GetActiveSessionByTokenHash(ctx context.Context, refreshTokenHash string) (Session, error) {
 	row := q.db.QueryRow(ctx, getActiveSessionByTokenHash, refreshTokenHash)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.RefreshTokenHash,
+		&i.UserAgent,
+		&i.Ip,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getActiveSessionUserByTokenHash = `-- name: GetActiveSessionUserByTokenHash :one
+SELECT id, user_id, refresh_token_hash, user_agent, ip, expires_at, revoked_at, created_at FROM sessions
+WHERE refresh_token_hash = $1
+AND user_id = $2
+AND revoked_at IS NULL 
+AND expires_at > now()
+`
+
+type GetActiveSessionUserByTokenHashParams struct {
+	RefreshTokenHash string      `json:"refresh_token_hash"`
+	UserID           pgtype.UUID `json:"user_id"`
+}
+
+// Get an active session by the hash of its refresh token and userid. Exclude revoked sessions.
+func (q *Queries) GetActiveSessionUserByTokenHash(ctx context.Context, arg GetActiveSessionUserByTokenHashParams) (Session, error) {
+	row := q.db.QueryRow(ctx, getActiveSessionUserByTokenHash, arg.RefreshTokenHash, arg.UserID)
 	var i Session
 	err := row.Scan(
 		&i.ID,

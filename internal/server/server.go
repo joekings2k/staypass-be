@@ -8,32 +8,36 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/joekings2k/staypass-be/internal/auth"
 	"github.com/joekings2k/staypass-be/internal/onboarding"
 	"github.com/joekings2k/staypass-be/internal/platform/config"
-	"github.com/joekings2k/staypass-be/internal/platform/web"
+	"github.com/joekings2k/staypass-be/internal/platform/logger"
+	"github.com/joekings2k/staypass-be/internal/platform/token"
 )
 
 type Handlers struct {
 	Onboarding *onboarding.Handler
+	Auth       *auth.Handler
 }
 
 type Server struct {
 	cfg      *config.Config
 	handlers Handlers
 	health   http.HandlerFunc
+	maker    token.Maker
 }
 
-func New(cfg *config.Config, handlers Handlers, health http.HandlerFunc) *Server {
+func New(cfg *config.Config, handlers Handlers, health http.HandlerFunc, maker token.Maker) *Server {
 	return &Server{
 		cfg:      cfg,
 		handlers: handlers,
 		health:   health,
+		maker:    maker,
 	}
 }
 
 func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
-
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(requestLogger)
@@ -59,7 +63,7 @@ func (s *Server) Router() http.Handler {
 
 func requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger := slog.Default().With(
+		log := slog.Default().With(
 			"request_id", middleware.GetReqID(r.Context()),
 			"method", r.Method,
 			"path", r.URL.Path,
@@ -67,11 +71,11 @@ func requestLogger(next http.Handler) http.Handler {
 
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		start := time.Now()
-		logger.Info("request started")
+		log.Info("request started")
 
-		next.ServeHTTP(ww, r.WithContext(web.WithLogger(r.Context(), logger)))
+		next.ServeHTTP(ww, r.WithContext(logger.WithLogger(r.Context(), log)))
 
-		logger.Info("request completed",
+		log.Info("request completed",
 			"status", ww.Status(),
 			"bytes", ww.BytesWritten(),
 			"duration_ms", time.Since(start).Milliseconds(),

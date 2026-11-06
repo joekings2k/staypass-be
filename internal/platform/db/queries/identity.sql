@@ -78,3 +78,11 @@ WHERE memberships.user_id = @user_id
 AND memberships.status = 'active'
 AND estates.is_active = true
 ORDER BY estates.name, memberships.created_at ;
+
+
+-- name: GetMembershipForUserByEstateID :many
+-- Get a membership for a user by their estate id
+SELECT role FROM memberships
+WHERE user_id = @user_id
+AND estate_id = @estate_id
+AND status = 'active';

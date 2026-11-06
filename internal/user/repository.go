@@ -47,11 +47,6 @@ func NewPgUserRepository(db *dbgen.Queries) UserRepository {
 	}
 }
 
-var (
-	ErrUserNotFound = errors.New("user not found")
-	ErrEmailTaken   = errors.New("email already registered")
-)
-
 func (r *pgUserRepository) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	dbUser, err := r.db.GetUserByID(ctx, toGetUserParams(id))
 	if err != nil {
