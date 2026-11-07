@@ -114,8 +114,8 @@ func (h Handler) Me(w http.ResponseWriter, r *http.Request) {
 
 func (h Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(CookieName)
-	if err != nil {
-		web.RespondWithError(w, r, err)
+	if err != nil || cookie.Value == "" {
+		web.RespondWithError(w, r, ErrUnAuthorized)
 		return
 	}
 
@@ -138,6 +138,31 @@ func (h Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		AccessTokenExpiresAt: result.AccessTokenExpiresAt,
 	})
 
+}
+
+// Logout revokes the session behind the refresh cookie and clears the cookie.
+// It always answers 204 so a client can call it unconditionally.
+func (h Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	if cookie, err := r.Cookie(CookieName); err == nil && cookie.Value != "" {
+		if err := h.service.Logout(r.Context(), cookie.Value); err != nil {
+			web.RespondWithError(w, r, err)
+			return
+		}
+	}
+	clearRefreshCookie(w)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func clearRefreshCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     CookieName,
+		Value:    "",
+		Path:     CookiePath,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+	})
 }
 
 func setRefreshCookie(w http.ResponseWriter, value string, expiresAt time.Time) {
@@ -165,7 +190,10 @@ func clientIP(r *http.Request) *netip.Addr {
 	return &ip
 }
 
+// RegisterRoutes mounts the public auth endpoints. The server mounts them under
+// CookiePath so the refresh cookie is sent to all three.
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/login", h.Login)
 	r.Post("/refresh", h.Refresh)
+	r.Post("/logout", h.Logout)
 }

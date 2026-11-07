@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/joekings2k/staypass-be/internal/auth"
+	"github.com/joekings2k/staypass-be/internal/estate"
 	"github.com/joekings2k/staypass-be/internal/onboarding"
 	"github.com/joekings2k/staypass-be/internal/platform/config"
 	"github.com/joekings2k/staypass-be/internal/platform/logger"
@@ -18,21 +19,28 @@ import (
 type Handlers struct {
 	Onboarding *onboarding.Handler
 	Auth       *auth.Handler
+	Estate     *estate.Handler
+}
+
+type Deps struct {
+	Maker       token.Maker
+	Memberships EstateAccessReader
+	Estates     EstateReader
 }
 
 type Server struct {
 	cfg      *config.Config
 	handlers Handlers
 	health   http.HandlerFunc
-	maker    token.Maker
+	deps     Deps
 }
 
-func New(cfg *config.Config, handlers Handlers, health http.HandlerFunc, maker token.Maker) *Server {
+func New(cfg *config.Config, handlers Handlers, health http.HandlerFunc, deps Deps) *Server {
 	return &Server{
 		cfg:      cfg,
 		handlers: handlers,
 		health:   health,
-		maker:    maker,
+		deps:     deps,
 	}
 }
 
@@ -56,6 +64,16 @@ func (s *Server) Router() http.Handler {
 
 	r.Route("/api/v1", func(r chi.Router) {
 		s.handlers.Onboarding.RegisterRoutes(r)
+		r.Route("/auth", s.handlers.Auth.RegisterRoutes) // must match auth.CookiePath
+
+		r.Group(func(r chi.Router) {
+			r.Use(RequireAuth(s.deps.Maker))
+			r.Get("/me", s.handlers.Auth.Me)
+			r.Route("/estates/{estate_id}", func(r chi.Router) {
+				r.Use(RequireEstate(s.deps.Memberships, s.deps.Estates))
+				s.handlers.Estate.RegisterRoutes(r)
+			})
+		})
 	})
 
 	return r

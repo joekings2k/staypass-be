@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- chore arranges some stuff (2026-11-06)
 - added the readmme (2026-08-30)
 - Session and account-claim-token integration tests in `sessions_test.go`: sessions (`TestCreateSession`, `TestGetSessionById`, `TestGetSessionByUserId`, `TestRevokeSession`, `TestRevokeAllSessionsForUser`), active-session lookups including not-found and expired negative cases, and claim tokens (`TestCreateAccountClaimToken`, `TestGetActiveClaimToken`). (2026-07-03)
 - `GetSessionByUserId` (`:many`) query and regenerated sqlc output. (2026-07-03)

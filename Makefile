@@ -3,7 +3,7 @@ export
 
 MIGRATIONS_DIR := ./migrations
 
-.PHONY: migrate-up migrate-down  migrate-status migrate-new sqlc test-db-up test run install-hooks
+.PHONY: migrate-up migrate-down  migrate-status migrate-new sqlc test-db-up test run smoke install-hooks
 
 migrate-up:
 	goose -dir $(MIGRATIONS_DIR) postgres "$(DATABASE_URL)" up
@@ -29,6 +29,10 @@ test: test-db-up
 
 run:
 	go run ./cmd/api
+
+# End-to-end auth/estate flow against a running API (make run in another shell).
+smoke:
+	./scripts/smoke.sh
 
 # Point git at the tracked hooks so CHANGELOG.md updates on every commit.
 install-hooks:

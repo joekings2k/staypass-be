@@ -2,10 +2,12 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"net/netip"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	dbgen "github.com/joekings2k/staypass-be/internal/platform/db/gen"
 )
@@ -71,6 +73,9 @@ func (r *pgAuthRepository) CreateSession(ctx context.Context, params CreateSessi
 func (r *pgAuthRepository) GetActiveSessionByTokenHash(ctx context.Context, tokenHash string) (Session, error) {
 	dbSession, err := r.queries.GetActiveSessionByTokenHash(ctx, tokenHash)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Session{}, ErrSessionNotFound
+		}
 		return Session{}, err
 	}
 	return toDomainSession(dbSession), nil

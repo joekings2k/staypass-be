@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/joekings2k/staypass-be/internal/membership"
 	"github.com/joekings2k/staypass-be/internal/platform/token"
 )
 
@@ -32,11 +31,14 @@ func UserIdFrom(ctx context.Context) (uuid.UUID, bool) {
 	return payload.UserID, true
 }
 
-func WithRoles(ctx context.Context, roles []membership.MembershipRole) context.Context {
+// WithRoles and RolesFrom are generic so this platform package never imports a
+// domain package (doing so creates import cycles). Callers must use the same T
+// on both sides, e.g. web.RolesFrom[membership.MembershipRole](ctx).
+func WithRoles[T any](ctx context.Context, roles []T) context.Context {
 	return context.WithValue(ctx, rolesKey, roles)
 }
 
-func RolesFrom(ctx context.Context) ([]membership.MembershipRole, bool) {
-	roles, ok := ctx.Value(rolesKey).([]membership.MembershipRole)
+func RolesFrom[T any](ctx context.Context) ([]T, bool) {
+	roles, ok := ctx.Value(rolesKey).([]T)
 	return roles, ok
 }

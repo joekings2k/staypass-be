@@ -29,8 +29,8 @@ func NewPasetoMaker(symmetricKey string) (Maker, error) {
 	return token, nil
 }
 
-func (maker *PasetoMaker) CreateToken(userID uuid.UUID, duration time.Duration) (string, Payload, error) {
-	payload, err := NewPayload(userID, duration)
+func (maker *PasetoMaker) CreateToken(userID uuid.UUID, tokenType TokenType, duration time.Duration) (string, Payload, error) {
+	payload, err := NewPayload(userID, tokenType, duration)
 	if err != nil {
 		return "", Payload{}, err
 	}
@@ -42,10 +42,15 @@ func (maker *PasetoMaker) CreateToken(userID uuid.UUID, duration time.Duration) 
 	return token, *payload, nil
 }
 
-func (maker *PasetoMaker) VerifyToken(token string) (*Payload, error) {
+func (maker *PasetoMaker) VerifyToken(token string, expected TokenType) (*Payload, error) {
 	payload := &Payload{}
 	err := maker.paseto.Decrypt(token, maker.symmetricKey, payload, nil)
 	if err != nil {
+		return nil, ErrInvalidToken
+	}
+	// Tokens minted before Type existed decode with an empty Type and are
+	// rejected here too; those users simply log in again.
+	if payload.Type != expected {
 		return nil, ErrInvalidToken
 	}
 	err = payload.Valid()

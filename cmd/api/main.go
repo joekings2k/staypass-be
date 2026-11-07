@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joekings2k/staypass-be/internal/auth"
+	"github.com/joekings2k/staypass-be/internal/estate"
 	"github.com/joekings2k/staypass-be/internal/membership"
 	"github.com/joekings2k/staypass-be/internal/onboarding"
 	"github.com/joekings2k/staypass-be/internal/platform/config"
@@ -63,10 +64,18 @@ func main() {
 	onboardingService := onboarding.NewOnboardingService(tx, hasher)
 	onboardingHandler := onboarding.NewHandler(onboardingService)
 
+	estateRepository := estate.NewPgEstateRepository(q)
+	estateHandler := estate.NewHandler(estateRepository)
+
 	appServer := server.New(cfg, server.Handlers{
 		Onboarding: onboardingHandler,
 		Auth:       authHandler,
-	}, handleHealth(pool), tokenMaker)
+		Estate:     estateHandler,
+	}, handleHealth(pool), server.Deps{
+		Maker:       tokenMaker,
+		Memberships: membershipRepository,
+		Estates:     estateRepository,
+	})
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.AppPort,

@@ -14,4 +14,8 @@ var (
 	ErrUnAuthorized = app.Unauthorized("unauthorized")
 
 	ErrUserNotFound = app.NotFound("user not found")
+
+	// ErrSessionNotFound means no active (unrevoked, unexpired) session
+	// matches the lookup.
+	ErrSessionNotFound = app.Unauthorized("session not found")
 )

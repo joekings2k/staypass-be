@@ -39,7 +39,7 @@ func RequireAuth(maker token.Maker) func(http.Handler) http.Handler {
 				return
 			}
 			accessToken := fields[1]
-			payload, err := maker.VerifyToken(accessToken)
+			payload, err := maker.VerifyToken(accessToken, token.TokenTypeAccess)
 			if err != nil {
 				web.Unauthorized(w, err.Error())
 				return
@@ -77,10 +77,11 @@ func RequireEstate(membershipRepo EstateAccessReader, estateRepo EstateReader) f
 			}
 			estateResult, err := estateRepo.FindEstateByID(r.Context(), estateIDUUID)
 			if err != nil {
-				web.Internal(w)
+
+				web.RespondWithError(w, r, err)
 				return
 			}
-			if estateResult.IsActive == false {
+			if !estateResult.IsActive {
 				web.Forbidden(w, "estate is not active")
 				return
 			}
@@ -90,7 +91,7 @@ func RequireEstate(membershipRepo EstateAccessReader, estateRepo EstateReader) f
 				EstateID: estateIDUUID,
 			})
 			if err != nil {
-				web.Internal(w)
+				web.RespondWithError(w, r, err)
 				return
 			}
 			if len(roles.Roles) == 0 {
@@ -106,7 +107,7 @@ func RequireEstate(membershipRepo EstateAccessReader, estateRepo EstateReader) f
 func RequireRole(role membership.MembershipRole) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			roles, ok := web.RolesFrom(r.Context())
+			roles, ok := web.RolesFrom[membership.MembershipRole](r.Context())
 			if !ok {
 				web.Internal(w)
 				return

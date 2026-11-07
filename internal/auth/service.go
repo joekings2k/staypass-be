@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/netip"
 	"strings"
@@ -128,11 +129,11 @@ func (s *AuthService) Login(ctx context.Context, params LoginParams) (LoginResul
 		return LoginResult{}, ErrInvalidCredentials
 	}
 
-	accessToken, accessPayload, err := s.tokeMaker.CreateToken(user.ID, s.config.AccessTokenTTL)
+	accessToken, accessPayload, err := s.tokeMaker.CreateToken(user.ID, token.TokenTypeAccess, s.config.AccessTokenTTL)
 	if err != nil {
 		return LoginResult{}, err
 	}
-	refreshToken, refreshPayload, err := s.tokeMaker.CreateToken(user.ID, s.config.RefreshTokenTTL)
+	refreshToken, refreshPayload, err := s.tokeMaker.CreateToken(user.ID, token.TokenTypeRefresh, s.config.RefreshTokenTTL)
 	if err != nil {
 		return LoginResult{}, err
 	}
@@ -192,7 +193,7 @@ type RefreshParams struct {
 func (s *AuthService) Refresh(ctx context.Context, params RefreshParams) (LoginResult, error) {
 	log := logger.LoggerFrom(ctx).With("op", "auth.Refresh")
 
-	refreshTokenPayload, err := s.tokeMaker.VerifyToken(params.RefreshToken)
+	refreshTokenPayload, err := s.tokeMaker.VerifyToken(params.RefreshToken, token.TokenTypeRefresh)
 	if err != nil {
 		log.Error("failed to verify refresh token", "error", err)
 		return LoginResult{}, ErrInvalidCredentials
@@ -215,12 +216,12 @@ func (s *AuthService) Refresh(ctx context.Context, params RefreshParams) (LoginR
 		return LoginResult{}, ErrInvalidCredentials
 	}
 
-	accessToken, accessPayload, err := s.tokeMaker.CreateToken(user.ID, s.config.AccessTokenTTL)
+	accessToken, accessPayload, err := s.tokeMaker.CreateToken(user.ID, token.TokenTypeAccess, s.config.AccessTokenTTL)
 	if err != nil {
 		return LoginResult{}, err
 	}
 
-	newRefreshToken, newRefreshPayload, err := s.tokeMaker.CreateToken(user.ID, s.config.RefreshTokenTTL)
+	newRefreshToken, newRefreshPayload, err := s.tokeMaker.CreateToken(user.ID, token.TokenTypeRefresh, s.config.RefreshTokenTTL)
 	if err != nil {
 		return LoginResult{}, err
 	}
@@ -248,6 +249,28 @@ func (s *AuthService) Refresh(ctx context.Context, params RefreshParams) (LoginR
 		RefereshTokenExpiresAt: newRefreshPayload.ExpiresAt,
 	}, nil
 
+}
+
+// Logout revokes the session behind the given refresh token. It is idempotent:
+// an unknown, expired or already-revoked token is not an error, because the
+// caller's goal (that token no longer works) already holds.
+func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
+	log := logger.LoggerFrom(ctx).With("op", "auth.Logout")
+
+	session, err := s.repo.GetActiveSessionByTokenHash(ctx, hash.HashToken(refreshToken))
+	if err != nil {
+		if errors.Is(err, ErrSessionNotFound) {
+			return nil
+		}
+		log.Error("failed to look up session", "error", err)
+		return err
+	}
+
+	if err := s.repo.RevokeSession(ctx, session.ID); err != nil {
+		log.Error("failed to revoke session", "error", err, "session_id", session.ID)
+		return err
+	}
+	return nil
 }
 
 func (s *AuthService) Claim(ctx context.Context, tokenHash string, password string) error {

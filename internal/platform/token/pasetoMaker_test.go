@@ -51,11 +51,11 @@ func TestPasetoMakerRoundTrip(t *testing.T) {
 	issuedAt := time.Now()
 	expiresAt := issuedAt.Add(duration)
 
-	tokenStr, created, err := maker.CreateToken(userID, duration)
+	tokenStr, created, err := maker.CreateToken(userID, TokenTypeAccess, duration)
 	require.NoError(t, err)
 	require.NotEmpty(t, tokenStr)
 
-	verified, err := maker.VerifyToken(tokenStr)
+	verified, err := maker.VerifyToken(tokenStr, TokenTypeAccess)
 	require.NoError(t, err)
 	require.NotNil(t, verified)
 
@@ -75,11 +75,11 @@ func TestPasetoMakerExpiredToken(t *testing.T) {
 	maker, err := NewPasetoMaker(randomSymmetricKey(t))
 	require.NoError(t, err)
 
-	tokenStr, _, err := maker.CreateToken(uuid.New(), -time.Minute)
+	tokenStr, _, err := maker.CreateToken(uuid.New(), TokenTypeAccess, -time.Minute)
 	require.NoError(t, err)
 	require.NotEmpty(t, tokenStr)
 
-	payload, err := maker.VerifyToken(tokenStr)
+	payload, err := maker.VerifyToken(tokenStr, TokenTypeAccess)
 	require.ErrorIs(t, err, ErrExpiredToken)
 	require.Nil(t, payload)
 }
@@ -88,7 +88,7 @@ func TestPasetoMakerTamperedToken(t *testing.T) {
 	maker, err := NewPasetoMaker(randomSymmetricKey(t))
 	require.NoError(t, err)
 
-	tokenStr, _, err := maker.CreateToken(uuid.New(), time.Minute)
+	tokenStr, _, err := maker.CreateToken(uuid.New(), TokenTypeAccess, time.Minute)
 	require.NoError(t, err)
 
 	// Flip one character inside the encrypted body. Both 'a' and 'b' are valid
@@ -115,7 +115,7 @@ func TestPasetoMakerTamperedToken(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			payload, err := maker.VerifyToken(tc.token)
+			payload, err := maker.VerifyToken(tc.token, TokenTypeAccess)
 			require.ErrorIs(t, err, ErrInvalidToken)
 			require.Nil(t, payload)
 		})
@@ -128,10 +128,39 @@ func TestPasetoMakerRejectsTokenFromAnotherKey(t *testing.T) {
 
 	attacker, err := NewPasetoMaker(randomSymmetricKey(t))
 	require.NoError(t, err)
-	tokenStr, _, err := issuer.CreateToken(uuid.New(), time.Minute)
+	tokenStr, _, err := issuer.CreateToken(uuid.New(), TokenTypeAccess, time.Minute)
 	require.NoError(t, err)
 
-	payload, err := attacker.VerifyToken(tokenStr)
+	payload, err := attacker.VerifyToken(tokenStr, TokenTypeAccess)
 	require.ErrorIs(t, err, ErrInvalidToken)
 	require.Nil(t, payload)
+}
+
+func TestPasetoMakerRejectsWrongTokenType(t *testing.T) {
+	maker, err := NewPasetoMaker(randomSymmetricKey(t))
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name     string
+		minted   TokenType
+		expected TokenType
+	}{
+		{name: "refresh used as access", minted: TokenTypeRefresh, expected: TokenTypeAccess},
+		{name: "access used as refresh", minted: TokenTypeAccess, expected: TokenTypeRefresh},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tokenStr, _, err := maker.CreateToken(uuid.New(), tc.minted, time.Minute)
+			require.NoError(t, err)
+
+			payload, err := maker.VerifyToken(tokenStr, tc.expected)
+			require.ErrorIs(t, err, ErrInvalidToken)
+			require.Nil(t, payload)
+
+			payload, err = maker.VerifyToken(tokenStr, tc.minted)
+			require.NoError(t, err)
+			require.Equal(t, tc.minted, payload.Type)
+		})
+	}
 }
